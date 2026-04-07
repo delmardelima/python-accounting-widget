@@ -1,0 +1,82 @@
+# **.geminiignore \- Projeto Python/Flask (sagecont)**
+# --- PESADOS & DESNECESSÁRIOS --
+node_modules/
+.next/
+dist/
+build/
+out/
+.cache/
+.vercel/
+__pycache__
+.agent
+.pytest_cache
+TTS/
+bat_run/
+bin/
+chrome_profile_rda/
+downloads/
+imgs/
+instance/
+logs/
+node_modules/
+storage/
+venv/
+.venv/
+old/
+test_output_images/
+extensao_solver/
+.agent/
+
+# -- ASSETS (O Gemini não precisa ler o código binário disso) --
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.mp4
+*.webm
+*.pdf
+*.zip
+*.tar.gz
+*.rar
+
+# -- LOGS & DIAGNÓSTICOS --
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+coverage/
+.clinic/
+agendador_tarefas.log
+server.log
+logs/
+
+# -- DADOS SENSÍVEIS (Segurança e Economia) --
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+certs/
+
+# -- CONFIGURAÇÕES DE IDE E SO --
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# -- SQL & DUMP (Evite subir bancos de dados inteiros para o contexto) --
+*.sql
+supabase/.temp/
+*.sqlite
+*.sqlite3
+*.db
+
+# -- pycache --
+*.pyc
+*.pyo
+*.pyd
+.coverage
+htmlcov/
