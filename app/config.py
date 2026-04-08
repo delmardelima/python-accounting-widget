@@ -3,6 +3,7 @@ Gerenciamento de configurações via arquivo INI.
 """
 import configparser
 import os
+import sys
 import logging
 
 logger = logging.getLogger(__name__)
@@ -29,8 +30,12 @@ _DEFAULTS = {
     },
 }
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.ini")
+if getattr(sys, 'frozen', False):
+    app_data_path = os.path.join(os.getenv('APPDATA'), "Sagecont-Win")
+else:
+    app_data_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+CONFIG_PATH = os.path.join(app_data_path, "config.ini")
 
 class Config:
     """Lê e salva configurações em config.ini."""

@@ -5,6 +5,7 @@ import sqlite3
 import json
 import logging
 import os
+import sys
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -12,8 +13,15 @@ from app.models import Tarefa
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sagecont.db")
+if getattr(sys, 'frozen', False):
+    app_data_path = os.path.join(os.getenv('APPDATA'), "Sagecont-Win")
+else:
+    app_data_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+if not os.path.exists(app_data_path):
+    os.makedirs(app_data_path)
+
+DB_PATH = os.path.join(app_data_path, "sagecont.db")
 
 class Database:
     """CRUD de tarefas + fila de sincronização."""
