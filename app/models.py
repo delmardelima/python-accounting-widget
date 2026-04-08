@@ -20,6 +20,12 @@ class Tarefa:
     excluida: bool = False
     modificada_localmente: bool = False
     ordem_usuario: int = 99999
+    
+    # --- NOVOS CAMPOS MVP ---
+    em_andamento: bool = False
+    data_vencimento: str = ""    # ISO format (YYYY-MM-DD) ou vazio
+    link_anexo: str = ""         # URL ou caminho do arquivo
+    delegado_para: str = ""      # Nome do usuário/setor delegado
 
     # ---------- serialização ----------
     def to_dict(self) -> dict:

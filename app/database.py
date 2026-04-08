@@ -47,7 +47,11 @@ class Database:
                 api_key       TEXT DEFAULT '',
                 excluida      INTEGER DEFAULT 0,
                 modificada_localmente INTEGER DEFAULT 0,
-                ordem_usuario INTEGER DEFAULT 99999
+                ordem_usuario INTEGER DEFAULT 99999,
+                em_andamento  INTEGER DEFAULT 0,
+                data_vencimento TEXT DEFAULT '',
+                link_anexo    TEXT DEFAULT '',
+                delegado_para TEXT DEFAULT ''
             );
 
             CREATE TABLE IF NOT EXISTS sync_queue (
@@ -81,6 +85,19 @@ class Database:
             self._conn.commit()
         except sqlite3.OperationalError:
             pass
+
+        novas_colunas = {
+            "em_andamento": "INTEGER DEFAULT 0",
+            "data_vencimento": "TEXT DEFAULT ''",
+            "link_anexo": "TEXT DEFAULT ''",
+            "delegado_para": "TEXT DEFAULT ''"
+        }
+        for col, tipo in novas_colunas.items():
+            try:
+                self._conn.execute(f"ALTER TABLE tarefas ADD COLUMN {col} {tipo}")
+                self._conn.commit()
+            except sqlite3.OperationalError:
+                pass
 
     # ------------------------------------------------------------------ #
     #  CRUD Tarefas
@@ -246,6 +263,9 @@ class Database:
     # ------------------------------------------------------------------ #
     @staticmethod
     def _row_to_tarefa(row) -> Tarefa:
+        # Armazenamos as chaves disponíveis na linha atual
+        keys = row.keys()
+        
         return Tarefa(
             id=row["id"],
             titulo=row["titulo"],
@@ -255,9 +275,18 @@ class Database:
             criado_em=row["criado_em"],
             atualizado_em=row["atualizado_em"],
             sincronizado=bool(row["sincronizado"]),
-            api_key=row["api_key"] if "api_key" in row.keys() else "",
-            excluida=bool(row["excluida"]) if "excluida" in row.keys() else False,
-            modificada_localmente=bool(row["modificada_localmente"]) if "modificada_localmente" in row.keys() else False
+            
+            # Checagens seguras (sem usar .get)
+            api_key=row["api_key"] if "api_key" in keys else "",
+            excluida=bool(row["excluida"]) if "excluida" in keys else False,
+            modificada_localmente=bool(row["modificada_localmente"]) if "modificada_localmente" in keys else False,
+            ordem_usuario=row["ordem_usuario"] if "ordem_usuario" in keys else 99999,
+            
+            # Novos campos MVP (verificação segura caso a migração do SQLite atrase)
+            em_andamento=bool(row["em_andamento"]) if "em_andamento" in keys else False,
+            data_vencimento=row["data_vencimento"] if "data_vencimento" in keys else "",
+            link_anexo=row["link_anexo"] if "link_anexo" in keys else "",
+            delegado_para=row["delegado_para"] if "delegado_para" in keys else ""
         )
 
     def fechar(self):

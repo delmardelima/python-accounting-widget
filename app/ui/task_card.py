@@ -15,6 +15,7 @@ class TaskCard(QFrame):
     state_changed = pyqtSignal(str, bool)
     delete_requested = pyqtSignal(str)
     edit_requested = pyqtSignal(str, str)
+    progress_changed = pyqtSignal(str, bool)
 
     def __init__(self, tarefa: dict, theme: str = "dark"):
         super().__init__()
@@ -47,27 +48,21 @@ class TaskCard(QFrame):
         )
         self.btn_check.clicked.connect(self._toggle_check)
 
+        # Botão Play/Pause (Em Andamento)
+        is_playing = tarefa.get("em_andamento", False)
+        self.btn_play = QPushButton("⏸" if is_playing else "▶")
+        self.btn_play.setFixedSize(22, 22)
+        self.btn_play.setFont(QFont("Segoe UI", 10))
+        self.btn_play.setStyleSheet(f"color: {'#E74C3C' if is_playing else self.c['text_secondary']}; border: none; background: transparent;")
+        self.btn_play.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.btn_play.setToolTip("Pausar" if is_playing else "Iniciar Tarefa")
+        self.btn_play.clicked.connect(self._toggle_play)
+
         # Título (editável)
         self.edit_titulo = QLineEdit(tarefa["titulo"])
         self._estilizar_leitura()
         self.edit_titulo.returnPressed.connect(self._finalizar_edicao)
         self.edit_titulo.editingFinished.connect(self._finalizar_edicao)
-
-        # Tags inline
-        self.layout_tags = QHBoxLayout()
-        self.layout_tags.setSpacing(4)
-        if not tarefa["concluida"]:
-            if tarefa.get("escopo") == "escritorio":
-                tag = QLabel("Escritório")
-                tag.setStyleSheet(
-                    f"background: {self.c['tag_escritorio_bg']}; color: {self.c['accent']};"
-                    "border-radius: 3px; font-size: 9px; padding: 1px 5px;"
-                )
-                self.layout_tags.addWidget(tag)
-            if tarefa.get("prioridade") == "alta":
-                tag = QLabel("⚡")
-                tag.setStyleSheet("font-size: 12px; padding: 0;")
-                self.layout_tags.addWidget(tag)
 
         # Botão editar
         self._icon_edit = "✏️"
@@ -96,12 +91,49 @@ class TaskCard(QFrame):
         # Montagem
         lay.addWidget(self.lbl_grip)
         lay.addWidget(self.btn_check)
+        if not tarefa.get("concluida"):
+            lay.addWidget(self.btn_play)
         lay.addWidget(self.edit_titulo, stretch=1)
-        lay.addLayout(self.layout_tags)
         lay.addWidget(self.btn_edit)
         lay.addWidget(self.btn_delete)
 
+        self._aplicar_cor_fundo()
+
     # ---------- estilos ----------
+    def _aplicar_cor_fundo(self):
+        """Define a cor de fundo do card baseada na prioridade e escopo."""
+        # Se estiver concluída, fica transparente para não chamar atenção
+        if self.tarefa["concluida"]:
+            bg_color = "transparent"
+            border = "1px solid transparent"
+        
+        # 1. Prioridade Máxima: Alta
+        elif self.tarefa.get("prioridade") == "alta":
+            # Fundo avermelhado/laranja suave
+            bg_color = "rgba(231, 76, 60, 0.15)"
+            border = "1px solid rgba(231, 76, 60, 0.4)"
+            
+        # 2. Prioridade Secundária: Escritório
+        elif self.tarefa.get("escopo") == "escritorio":
+            # Fundo azulado suave
+            bg_color = "rgba(52, 152, 219, 0.15)"
+            border = "1px solid rgba(52, 152, 219, 0.4)"
+            
+        # 3. Padrão: Tarefa Particular / Normal
+        else:
+            # Fundo neutro/cinza
+            bg_color = "rgba(150, 150, 150, 0.08)"
+            border = "1px solid transparent"
+
+        # Aplica o estilo focando apenas no QFrame principal usando o ObjectName
+        self.setStyleSheet(f"""
+            #TaskCard {{
+                background-color: {bg_color};
+                border: {border};
+                border-radius: 6px;
+            }}
+        """)
+
     def _estilizar_leitura(self):
         self.edit_titulo.setReadOnly(True)
         self.edit_titulo.setCursorPosition(0)
@@ -154,3 +186,23 @@ class TaskCard(QFrame):
     # ---------- check ----------
     def _toggle_check(self):
         self.state_changed.emit(self.tarefa["id"], not self.tarefa["concluida"])
+
+    # ---------- play/pause ----------
+    def _toggle_play(self):
+        novo_estado = not self.tarefa.get("em_andamento", False)
+        self.tarefa["em_andamento"] = novo_estado
+        
+        # Atualiza visual do botão
+        if novo_estado:
+            self.btn_play.setText("⏸")
+            self.btn_play.setStyleSheet(f"color: #E74C3C; border: none; background: transparent;")
+            self.btn_play.setToolTip("Pausar Tarefa")
+        else:
+            self.btn_play.setText("▶")
+            self.btn_play.setStyleSheet(f"color: {self.c['text_secondary']}; border: none; background: transparent;")
+            self.btn_play.setToolTip("Iniciar Tarefa")
+            
+        # Opcional: Mudar cor do card sutilmente quando em andamento
+        self._aplicar_cor_fundo()
+        
+        self.progress_changed.emit(self.tarefa["id"], novo_estado)

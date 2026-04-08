@@ -1,15 +1,17 @@
 """
-Widget principal de tarefas — UI reestruturada com suporte a temas.
+Widget principal de tarefas — UI reestruturada com suporte a temas e formulário dedicado.
 """
 import logging
+import re
+from datetime import datetime, timedelta
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QFrame, QStackedWidget, QSlider,
     QListWidgetItem,
 )
-from PyQt6.QtCore import Qt, QSize, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QCursor
+from PyQt6.QtCore import Qt, QSize, pyqtSignal, QPropertyAnimation, QRect, QEasingCurve
+from PyQt6.QtGui import QColor, QFont, QCursor, QShortcut, QKeySequence
 from PyQt6.QtWidgets import QGraphicsDropShadowEffect
 
 from app.models import Tarefa
@@ -57,7 +59,7 @@ class WidgetTarefasModerno(QWidget):
         self.is_collapsed = False
         self.margin = 15
         self.base_expanded_size = QSize(380, 560)
-        self.base_collapsed_size = QSize(40, 40)
+        self.base_collapsed_size = QSize(65, 40)
 
         self.expanded_size = QSize(
             self.base_expanded_size.width() + self.margin * 2,
@@ -125,22 +127,29 @@ class WidgetTarefasModerno(QWidget):
         self.main_layout.setContentsMargins(16, 14, 16, 14)
         self.main_layout.setSpacing(8)
 
-        # Stacked: tarefas | configs
+        # --- CORREÇÃO: Stacked Widget e Criação das 3 Páginas ---
         self.stacked = QStackedWidget()
         self.main_layout.addWidget(self.stacked)
 
         self.page_tarefas = QWidget()
         self.page_configs = QWidget()
+        self.page_form = QWidget()  # Cria a página do formulário
+
+        # Constrói o conteúdo de cada página
         self._build_page_tarefas()
         self._build_page_configs()
+        self._build_page_form()     # Chama a construção do formulário
+
+        # Adiciona na ordem correta (0=Lista, 1=Configs, 2=Formulário)
         self.stacked.addWidget(self.page_tarefas)
         self.stacked.addWidget(self.page_configs)
+        self.stacked.addWidget(self.page_form)
 
         # Aplica estilos inline baseados no tema
         self._aplicar_estilos_tema()
 
     # ------------------------------------------------------------------ #
-    #  Página de tarefas
+    #  Página 0: Lista de Tarefas
     # ------------------------------------------------------------------ #
     def _build_page_tarefas(self):
         layout = QVBoxLayout(self.page_tarefas)
@@ -153,6 +162,9 @@ class WidgetTarefasModerno(QWidget):
 
         self.lbl_logo = QLabel("Tarefas")
         self.lbl_logo.setFont(QFont("Segoe UI", 13, QFont.Weight.DemiBold))
+
+        self.lbl_contador = QLabel("0")
+        self.lbl_contador.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         btn_size = 28
 
@@ -172,7 +184,9 @@ class WidgetTarefasModerno(QWidget):
         self.btn_collapse.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.btn_collapse.clicked.connect(self._toggle_collapse)
 
-        header.addWidget(self.lbl_logo, stretch=1)
+        header.addWidget(self.lbl_logo)
+        header.addWidget(self.lbl_contador)
+        header.addStretch(1)
         header.addWidget(self.btn_config)
         header.addWidget(self.btn_collapse)
         layout.addLayout(header)
@@ -195,66 +209,33 @@ class WidgetTarefasModerno(QWidget):
         tabs.addStretch()
         layout.addLayout(tabs)
 
-        # --- Bloco de criação ---
-        self.input_container = QWidget()
-        input_v = QVBoxLayout(self.input_container)
-        input_v.setContentsMargins(0, 0, 0, 0)
-        input_v.setSpacing(6)
+        # --- Barra de Pesquisa e Botão '+' ---
+        self.search_container = QWidget()
+        search_lay = QHBoxLayout(self.search_container)
+        search_lay.setContentsMargins(0, 0, 0, 0)
+        search_lay.setSpacing(8)
 
-        # Input + botão "+"
-        input_row = QHBoxLayout()
-        input_row.setSpacing(6)
-        self.input_tarefa = QLineEdit()
-        self.input_tarefa.setObjectName("TaskInput")
-        self.input_tarefa.setPlaceholderText("Nova tarefa...")
-        self.input_tarefa.returnPressed.connect(self._adicionar_tarefa)
+        self.input_pesquisa = QLineEdit()
+        self.input_pesquisa.setObjectName("TaskInput")
+        self.input_pesquisa.setPlaceholderText("🔍 Pesquisar tarefas...")
+        self.input_pesquisa.textChanged.connect(self._atualizar_lista)
 
-        self.btn_add = QPushButton("+")
-        self.btn_add.setObjectName("BtnAddTask")
-        self.btn_add.setFixedSize(34, 34)
-        self.btn_add.setFont(QFont("Segoe UI", 15, QFont.Weight.Normal))
-        self.btn_add.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        self.btn_add.setToolTip("Adicionar tarefa")
-        self.btn_add.clicked.connect(self._adicionar_tarefa)
+        self.btn_abrir_form = QPushButton("+")
+        self.btn_abrir_form.setObjectName("BtnAddTask")
+        self.btn_abrir_form.setFixedSize(36, 36)
+        self.btn_abrir_form.setFont(QFont("Segoe UI", 16))
+        self.btn_abrir_form.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.btn_abrir_form.setToolTip("Criar Nova Tarefa")
+        self.btn_abrir_form.clicked.connect(self._mostrar_form_criacao)
 
-        input_row.addWidget(self.input_tarefa, stretch=1)
-        input_row.addWidget(self.btn_add)
-        input_v.addLayout(input_row)
+        search_lay.addWidget(self.input_pesquisa, stretch=1)
+        search_lay.addWidget(self.btn_abrir_form)
+        layout.addWidget(self.search_container)
 
-        # Toggle tags (escopo + prioridade)
-        tags_row = QHBoxLayout()
-        tags_row.setSpacing(4)
-
-        self.tag_minha = QPushButton("Particular")
-        self.tag_escritorio = QPushButton("Escritório")
-        self.tag_normal = QPushButton("Normal")
-        self.tag_alta = QPushButton("Alta ⚡")
-
-        self._escopo_tags = [self.tag_minha, self.tag_escritorio]
-        self._prior_tags = [self.tag_normal, self.tag_alta]
-
-        for tag in self._escopo_tags + self._prior_tags:
-            tag.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-            tag.setProperty("class", "ToggleTag")
-
-        # Defaults activos (serão sobrescritos por _restaurar_estado)
-        self.tag_minha.setProperty("class", "ToggleTag Active")
-        self.tag_normal.setProperty("class", "ToggleTag Active")
-
-        self.tag_minha.clicked.connect(lambda: self._select_tag(self._escopo_tags, self.tag_minha))
-        self.tag_escritorio.clicked.connect(lambda: self._select_tag(self._escopo_tags, self.tag_escritorio))
-        self.tag_normal.clicked.connect(lambda: self._select_tag(self._prior_tags, self.tag_normal))
-        self.tag_alta.clicked.connect(lambda: self._select_tag(self._prior_tags, self.tag_alta))
-
-        tags_row.addWidget(self.tag_minha)
-        tags_row.addWidget(self.tag_escritorio)
-        tags_row.addSpacing(8)
-        tags_row.addWidget(self.tag_normal)
-        tags_row.addWidget(self.tag_alta)
-        tags_row.addStretch()
-
-        input_v.addLayout(tags_row)
-        layout.addWidget(self.input_container)
+        # NOVO: Atalho de Teclado (Ctrl + N)
+        self.atalho_nova_tarefa = QShortcut(QKeySequence("Ctrl+N"), self.page_tarefas)
+        self.atalho_nova_tarefa.activated.connect(self._mostrar_form_criacao)
+        self.btn_abrir_form.setToolTip("Criar Nova Tarefa (Ctrl+N)") # Atualiza a dica visual
 
         # --- Divisória ---
         divider = QFrame()
@@ -271,12 +252,22 @@ class WidgetTarefasModerno(QWidget):
         self.filtro_tudo = QPushButton("Todas")
         self.filtro_minhas = QPushButton("Minhas")
         self.filtro_escritorio = QPushButton("Escritório")
-        self.filtro_alta = QPushButton("Alta ⚡")
+        self.filtro_alta = QPushButton("Alta")
+        self.filtro_delegadas = QPushButton("Delegadas") # Novo Filtro
 
         self.botoes_filtro = [
             self.filtro_tudo, self.filtro_minhas,
             self.filtro_escritorio, self.filtro_alta,
+            self.filtro_delegadas
         ]
+
+        # Estilização
+        self.filtro_tudo.setStyleSheet(self._obter_estilo_botao_legenda("normal"))
+        self.filtro_minhas.setStyleSheet(self._obter_estilo_botao_legenda("normal"))
+        self.filtro_escritorio.setStyleSheet(self._obter_estilo_botao_legenda("escritorio"))
+        self.filtro_alta.setStyleSheet(self._obter_estilo_botao_legenda("alta"))
+        self.filtro_delegadas.setStyleSheet(self._obter_estilo_botao_legenda("normal"))
+
         for btn in self.botoes_filtro:
             btn.setCheckable(True)
             btn.setProperty("class", "FilterChip")
@@ -294,7 +285,110 @@ class WidgetTarefasModerno(QWidget):
         layout.addWidget(self.lista_tarefas)
 
     # ------------------------------------------------------------------ #
-    #  Página de configurações
+    #  Página 2: Formulário de Criação
+    # ------------------------------------------------------------------ #
+    def _build_page_form(self):
+        layout = QVBoxLayout(self.page_form)
+        layout.setSpacing(10)
+        
+        header = QHBoxLayout()
+        btn_voltar_form = QPushButton("❮ Voltar")
+        btn_voltar_form.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        btn_voltar_form.setStyleSheet("background: transparent; color: #63B3ED; font-weight: bold; border: none; font-size: 13px;")
+        btn_voltar_form.clicked.connect(self._esconder_form_criacao)
+        header.addWidget(btn_voltar_form)
+        header.addStretch()
+        layout.addLayout(header)
+
+        lbl_titulo = QLabel("<b>Nova Tarefa</b>")
+        lbl_titulo.setFont(QFont("Segoe UI", 12))
+        layout.addWidget(lbl_titulo)
+
+        # Input Principal (Smart Input)
+        self.form_titulo = QLineEdit()
+        self.form_titulo.setObjectName("TaskInput")
+        self.form_titulo.setPlaceholderText("Ex: Pagar guia #urgente @escritorio")
+        self.form_titulo.textChanged.connect(self._smart_input_parser)
+        self.form_titulo.returnPressed.connect(self._salvar_nova_tarefa_form)
+        layout.addWidget(self.form_titulo)
+
+        # Quick Dates
+        date_lay = QHBoxLayout()
+        self.btn_date_hoje = QPushButton("📅 Hoje")
+        self.btn_date_amanha = QPushButton("📅 Amanhã")
+        self.btn_date_segunda = QPushButton("📅 Próx Seg")
+        self._date_btns = [self.btn_date_hoje, self.btn_date_amanha, self.btn_date_segunda]
+        
+        for btn in self._date_btns:
+            btn.setProperty("class", "ToggleTag")
+            btn.setCheckable(True)
+            btn.clicked.connect(lambda checked, b=btn: self._select_date(b))
+            date_lay.addWidget(btn)
+        layout.addLayout(date_lay)
+
+        # Tags de Configuração
+        config_lay = QHBoxLayout()
+        self.form_tag_minha = QPushButton("Particular")
+        self.form_tag_escritorio = QPushButton("Escritório")
+        self.form_tag_normal = QPushButton("Normal")
+        self.form_tag_alta = QPushButton("Alta")
+        
+        # Agrupamentos lógicos
+        self._escopo_tags = [self.form_tag_minha, self.form_tag_escritorio]
+        self._prior_tags = [self.form_tag_normal, self.form_tag_alta]
+
+        # Estilização
+        self.form_tag_minha.setStyleSheet(self._obter_estilo_botao_legenda("normal"))
+        self.form_tag_escritorio.setStyleSheet(self._obter_estilo_botao_legenda("escritorio"))
+        self.form_tag_normal.setStyleSheet(self._obter_estilo_botao_legenda("normal"))
+        self.form_tag_alta.setStyleSheet(self._obter_estilo_botao_legenda("alta"))
+
+        for tag in self._escopo_tags + self._prior_tags:
+            tag.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+            tag.setProperty("class", "ToggleTag")
+            tag.setCheckable(True)
+
+        # Eventos (mesmo sistema de select anterior)
+        self.form_tag_minha.clicked.connect(lambda: self._select_tag(self._escopo_tags, self.form_tag_minha))
+        self.form_tag_escritorio.clicked.connect(lambda: self._select_tag(self._escopo_tags, self.form_tag_escritorio))
+        self.form_tag_normal.clicked.connect(lambda: self._select_tag(self._prior_tags, self.form_tag_normal))
+        self.form_tag_alta.clicked.connect(lambda: self._select_tag(self._prior_tags, self.form_tag_alta))
+
+        config_lay.addWidget(self.form_tag_minha)
+        config_lay.addWidget(self.form_tag_escritorio)
+        config_lay.addSpacing(10)
+        config_lay.addWidget(self.form_tag_normal)
+        config_lay.addWidget(self.form_tag_alta)
+        layout.addLayout(config_lay)
+
+        # Links e Delegação
+        self.form_link = QLineEdit()
+        self.form_link.setObjectName("TaskInput")
+        self.form_link.setPlaceholderText("🔗 Link ou anexo (opcional)")
+        self.form_link.returnPressed.connect(self._salvar_nova_tarefa_form)
+        layout.addWidget(self.form_link)
+
+        self.form_delegar = QLineEdit()
+        self.form_delegar.setObjectName("TaskInput")
+        self.form_delegar.setPlaceholderText("👤 Delegar para (nome/setor)")
+        self.form_delegar.returnPressed.connect(self._salvar_nova_tarefa_form)
+        layout.addWidget(self.form_delegar)
+
+        layout.addStretch()
+
+        # Botão Salvar
+        self.btn_salvar_tarefa = QPushButton("Criar Tarefa")
+        self.btn_salvar_tarefa.setStyleSheet("background-color: #48BB78; color: white; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: bold;")
+        self.btn_salvar_tarefa.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.btn_salvar_tarefa.clicked.connect(self._salvar_nova_tarefa_form)
+        layout.addWidget(self.btn_salvar_tarefa)
+
+        # NOVO: Atalho para cancelar/fechar o formulário com a tecla 'Esc'
+        self.atalho_fechar_form = QShortcut(QKeySequence("Esc"), self.page_form)
+        self.atalho_fechar_form.activated.connect(self._esconder_form_criacao)
+
+    # ------------------------------------------------------------------ #
+    #  Página 1: Configurações
     # ------------------------------------------------------------------ #
     def _build_page_configs(self):
         layout = QVBoxLayout(self.page_configs)
@@ -378,39 +472,44 @@ class WidgetTarefasModerno(QWidget):
         layout.addWidget(self.btn_voltar)
 
     # ================================================================== #
-    #  TEMA
+    #  ESTILOS GERAIS
     # ================================================================== #
-    def _on_tema_clicked(self):
-        """Callback dos botões de tema."""
-        remetente = self.sender()
-        modo = self._mapa_tema.get(remetente, "sistema")
-        self._mudar_tema(modo)
+    def _obter_estilo_botao_legenda(self, tipo: str) -> str:
+        """Gera o estilo CSS dos botões para servir como legenda visual das cores dos cards."""
+        if tipo == "alta":
+            cor_bg = "rgba(231, 76, 60, 0.15)"
+            cor_hover = "rgba(231, 76, 60, 0.25)"
+            cor_active = "rgba(231, 76, 60, 0.35)"
+            cor_borda = "rgba(231, 76, 60, 0.8)"
+        elif tipo == "escritorio":
+            cor_bg = "rgba(52, 152, 219, 0.15)"
+            cor_hover = "rgba(52, 152, 219, 0.25)"
+            cor_active = "rgba(52, 152, 219, 0.35)"
+            cor_borda = "rgba(52, 152, 219, 0.8)"
+        else:
+            cor_bg = "rgba(150, 150, 150, 0.08)"
+            cor_hover = "rgba(150, 150, 150, 0.15)"
+            cor_active = "rgba(150, 150, 150, 0.25)"
+            cor_borda = "rgba(150, 150, 150, 0.6)"
 
-    def _mudar_tema(self, modo: str):
-        """Aplica e persiste o modo de tema escolhido."""
-        self.modo_tema = modo
-        self.tema_atual = resolver_tema(modo)
-
-        # Salvar
-        self.config.set("state", "tema", modo)
-        self.config.save()
-
-        # Aplicar
-        self.setStyleSheet(get_stylesheet(self.tema_atual))
-        self._aplicar_estilos_tema()
-        self._atualizar_seletor_tema()
-        self._atualizar_lista()
-
-    def _atualizar_seletor_tema(self):
-        """Destaca o botão do tema ativo."""
-        mapa_inverso = {v: k for k, v in self._mapa_tema.items()}
-        for btn in self._botoes_tema:
-            if btn == mapa_inverso.get(self.modo_tema):
-                btn.setProperty("class", "ThemeBtn Active")
-            else:
-                btn.setProperty("class", "ThemeBtn")
-            btn.style().unpolish(btn)
-            btn.style().polish(btn)
+        return f"""
+            QPushButton {{
+                background-color: {cor_bg};
+                border: 1px solid transparent;
+                border-radius: 6px;
+                padding: 4px 10px;
+                font-size: 11px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background-color: {cor_hover};
+                border: 1px solid {cor_bg};
+            }}
+            QPushButton[class~="Active"], QPushButton:checked {{
+                background-color: {cor_active};
+                border: 1px solid {cor_borda};
+            }}
+        """
 
     def _aplicar_estilos_tema(self):
         """Aplica estilos inline que dependem do tema atual."""
@@ -434,40 +533,127 @@ class WidgetTarefasModerno(QWidget):
             "padding: 8px; border-radius: 8px; font-weight: 500;"
         )
 
+        # Badge do contador
+        self.lbl_contador.setStyleSheet(
+            "background-color: #E74C3C; color: white; "
+            "border-radius: 10px; padding: 2px 7px; "
+            "font-size: 11px; font-weight: bold;"
+        )
+
         # Labels de versão / legal
         self.lbl_versao.setStyleSheet(f"color: {c['text_version']};")
         self.lbl_legal.setStyleSheet(f"color: {c['text_version']};")
 
+    def _atualizar_contadores(self):
+        """Calcula as tarefas pendentes e atualiza a UI."""
+        pendentes = sum(1 for t in self.tarefas if not t.get("concluida", False))
+        self.lbl_contador.setText(str(pendentes))
+        self.lbl_contador.setVisible(pendentes > 0)
+        
+        if pendentes > 0:
+            self.btn_expand.setText(f"❮   {pendentes}")
+        else:
+            self.btn_expand.setText("❮")
+
     # ================================================================== #
-    #  DADOS
+    #  LÓGICA DO FORMULÁRIO DE CRIAÇÃO
+    # ================================================================== #
+    def _mostrar_form_criacao(self):
+        # 1. Troca para a página do formulário
+        self.stacked.setCurrentIndex(2)
+        
+        # 2. Usa self.anim para o Python NÃO destruir a animação antes dela terminar!
+        self.anim = QPropertyAnimation(self.page_form, b"geometry")
+        self.anim.setDuration(250)
+        
+        # Pega o tamanho atual do container
+        geom = self.stacked.geometry()
+        
+        # Começa com a largura empurrada para a direita (fora da tela) e desliza para o (0, 0)
+        self.anim.setStartValue(QRect(geom.width(), 0, geom.width(), geom.height()))
+        self.anim.setEndValue(QRect(0, 0, geom.width(), geom.height()))
+        self.anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        # Inicia a animação
+        self.anim.start()
+        
+        # Dá foco automático no campo de título para o usuário já sair digitando
+        self.form_titulo.setFocus()
+
+    def _esconder_form_criacao(self):
+        # Limpa os campos
+        self.form_titulo.clear()
+        self.form_link.clear()
+        self.form_delegar.clear()
+        for b in self._date_btns: 
+            b.setChecked(False)
+            
+        # Retorna para a aba de listas sem animação ou com transição instantânea
+        self.stacked.setCurrentIndex(0)
+
+    def _smart_input_parser(self, text):
+        """Ativa botões automaticamente baseado em texto (#urgente, @escritorio)."""
+        if "#urgente" in text.lower() or "#alta" in text.lower():
+            self._select_tag(self._prior_tags, self.form_tag_alta)
+        
+        if "@escritorio" in text.lower():
+            self._select_tag(self._escopo_tags, self.form_tag_escritorio)
+
+    def _select_date(self, selected_btn):
+        for btn in self._date_btns:
+            if btn != selected_btn:
+                btn.setChecked(False)
+
+    def _salvar_nova_tarefa_form(self):
+        texto = self.form_titulo.text()
+        
+        # Remove as tags do texto visual
+        texto_limpo = re.sub(r'#\w+|@\w+', '', texto).strip()
+        if not texto_limpo:
+            return
+
+        escopo = "escritorio" if self.form_tag_escritorio.isChecked() else "minha"
+        prioridade = "alta" if self.form_tag_alta.isChecked() else "normal"
+        link = self.form_link.text().strip()
+        delegado = self.form_delegar.text().strip()
+        api_key = self.config.get("api", "api_key", fallback="")
+
+        # Lógica das datas (Quick Dates)
+        data_venc = ""
+        hoje = datetime.now()
+        if self.btn_date_hoje.isChecked():
+            data_venc = hoje.strftime("%Y-%m-%d")
+        elif self.btn_date_amanha.isChecked():
+            data_venc = (hoje + timedelta(days=1)).strftime("%Y-%m-%d")
+        elif self.btn_date_segunda.isChecked():
+            days_ahead = 0 - hoje.weekday() + 7 
+            if days_ahead <= 0: days_ahead += 7
+            data_venc = (hoje + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+
+        tarefa = Tarefa(
+            titulo=texto_limpo, 
+            escopo=escopo, 
+            prioridade=prioridade, 
+            api_key=api_key,
+            data_vencimento=data_venc,
+            link_anexo=link,
+            delegado_para=delegado
+        )
+        
+        self.db.inserir(tarefa)
+        self._esconder_form_criacao()
+        self._carregar_tarefas()
+
+    # ================================================================== #
+    #  AÇÕES DE DADOS (LISTA/BANCO)
     # ================================================================== #
     def _carregar_tarefas(self):
-        """Carrega tarefas do SQLite e popula a lista."""
         api_key = self.config.get("api", "api_key", fallback="")
         lista = self.db.listar(api_key)
         self.tarefas = [t.to_dict() for t in lista]
         self._atualizar_lista()
 
     def refresh_do_sync(self):
-        """Chamado pelo SyncWorker quando há dados novos da API."""
-        self._carregar_tarefas()
-
-    # ================================================================== #
-    #  AÇÕES
-    # ================================================================== #
-    def _adicionar_tarefa(self):
-        texto = self.input_tarefa.text().strip()
-        if not texto:
-            return
-
-        escopo = "escritorio" if "Active" in (self.tag_escritorio.property("class") or "") else "minha"
-        prioridade = "alta" if "Active" in (self.tag_alta.property("class") or "") else "normal"
-        api_key = self.config.get("api", "api_key", fallback="")
-
-        tarefa = Tarefa(titulo=texto, escopo=escopo, prioridade=prioridade, api_key=api_key)
-        self.db.inserir(tarefa)
-
-        self.input_tarefa.clear()
         self._carregar_tarefas()
 
     def _alterar_status(self, tarefa_id: str, concluida: bool):
@@ -491,29 +677,29 @@ class WidgetTarefasModerno(QWidget):
         self._carregar_tarefas()
 
     # ================================================================== #
-    #  TOGGLE TAGS
+    #  TOGGLE TAGS (UI ESTADO)
     # ================================================================== #
     def _select_tag(self, grupo: list, ativo: QPushButton):
         for btn in grupo:
             btn.setProperty("class", "ToggleTag")
+            btn.setChecked(False)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
+            
         ativo.setProperty("class", "ToggleTag Active")
+        ativo.setChecked(True)
         ativo.style().unpolish(ativo)
         ativo.style().polish(ativo)
 
-        # Persistir tags de criação
-        if grupo == self._escopo_tags:
-            valor = "escritorio" if ativo == self.tag_escritorio else "minha"
+        # Salva a preferência de última escolha
+        if grupo == getattr(self, '_escopo_tags', []):
+            valor = "escritorio" if ativo == getattr(self, 'form_tag_escritorio', None) else "minha"
             self.config.set("state", "tag_escopo", valor)
-        elif grupo == self._prior_tags:
-            valor = "alta" if ativo == self.tag_alta else "normal"
+        elif grupo == getattr(self, '_prior_tags', []):
+            valor = "alta" if ativo == getattr(self, 'form_tag_alta', None) else "normal"
             self.config.set("state", "tag_prioridade", valor)
         self.config.save()
 
-    # ================================================================== #
-    #  FILTROS / ABAS
-    # ================================================================== #
     def _tratar_filtro(self):
         remetente = self.sender()
         if remetente in [self.filtro_tudo, self.filtro_minhas, self.filtro_escritorio]:
@@ -530,12 +716,12 @@ class WidgetTarefasModerno(QWidget):
         if concluidas:
             self.btn_concluidas.setProperty("class", "TabButton Active")
             self.btn_pendentes.setProperty("class", "TabButton")
-            self.input_container.hide()
+            self.search_container.hide()
             self.filtros_container.hide()
         else:
             self.btn_pendentes.setProperty("class", "TabButton Active")
             self.btn_concluidas.setProperty("class", "TabButton")
-            self.input_container.show()
+            self.search_container.show()
             self.filtros_container.show()
 
         for btn in [self.btn_pendentes, self.btn_concluidas]:
@@ -547,14 +733,15 @@ class WidgetTarefasModerno(QWidget):
         self._atualizar_lista()
 
     # ================================================================== #
-    #  LISTA
+    #  LISTA E ORDENAÇÃO
     # ================================================================== #
     def _atualizar_lista(self):
         self.lista_tarefas.clear()
         c = get_palette(self.tema_atual)
         filtradas = []
+        
         for t in self.tarefas:
-            if t["concluida"] != self.mostrar_concluidas:
+            if t.get("concluida", False) != self.mostrar_concluidas:
                 continue
             if self.filtro_minhas.isChecked() and t.get("escopo") != "minha":
                 continue
@@ -562,6 +749,13 @@ class WidgetTarefasModerno(QWidget):
                 continue
             if self.filtro_alta.isChecked() and t.get("prioridade") != "alta":
                 continue
+            if self.filtro_delegadas.isChecked() and not t.get("delegado_para"):
+                continue
+                
+            termo = self.input_pesquisa.text().lower()
+            if termo and termo not in t.get("titulo", "").lower():
+                continue
+                
             filtradas.append(t)
 
         if not filtradas:
@@ -570,63 +764,86 @@ class WidgetTarefasModerno(QWidget):
             msg = "Nenhuma tarefa pendente" if not self.mostrar_concluidas else "Nenhuma tarefa concluída"
             lbl = QLabel(msg)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl.setStyleSheet(
-                f"color: {c['text_disabled']}; font-size: 12px; font-style: italic; margin-top: 20px;"
-            )
+            lbl.setStyleSheet(f"color: {c['text_disabled']}; font-size: 12px; font-style: italic; margin-top: 20px;")
             item.setSizeHint(QSize(0, 60))
             self.lista_tarefas.setItemWidget(item, lbl)
-            return
+        else:
+            for tarefa in filtradas:
+                card = TaskCard(tarefa, theme=self.tema_atual)
+                card.state_changed.connect(self._alterar_status)
+                card.delete_requested.connect(self._excluir_tarefa)
+                card.edit_requested.connect(self._editar_tarefa)
+                
+                # Se a emissão do Play/Pause foi configurada no Card:
+                if hasattr(card, "progress_changed"):
+                    card.progress_changed.connect(self._atualizar_progresso)
 
-        for tarefa in filtradas:
-            card = TaskCard(tarefa, theme=self.tema_atual)
-            card.state_changed.connect(self._alterar_status)
-            card.delete_requested.connect(self._excluir_tarefa)
-            card.edit_requested.connect(self._editar_tarefa)
+                item = QListWidgetItem(self.lista_tarefas)
+                item.setData(Qt.ItemDataRole.UserRole, tarefa["id"])
+                item.setSizeHint(QSize(0, 48))
+                self.lista_tarefas.setItemWidget(item, card)
 
-            item = QListWidgetItem(self.lista_tarefas)
-            item.setData(Qt.ItemDataRole.UserRole, tarefa["id"])
-            item.setSizeHint(QSize(0, 48))
-            self.lista_tarefas.setItemWidget(item, card)
+        self._atualizar_contadores()
+
+    def _atualizar_progresso(self, tarefa_id: str, em_andamento: bool):
+        """Salva a mudança de progresso (play/pause)."""
+        api_key = self.config.get("api", "api_key", fallback="")
+        t = self.db.buscar_por_id(tarefa_id, api_key)
+        if t:
+            t.em_andamento = em_andamento
+            self.db.atualizar(t)
+            self._carregar_tarefas()
 
     def _sincronizar_ordem(self):
         """Mescla persistência no banco com atualização da lista em memória."""
         nova_ordem_ids = []
-        
-        # 1. Identificar a nova ordem visual e persistir no SQLite
         for i in range(self.lista_tarefas.count()):
             uid = self.lista_tarefas.item(i).data(Qt.ItemDataRole.UserRole)
             if uid:
                 nova_ordem_ids.append(uid)
-                # Atualiza a coluna ordem_usuario no banco de dados local
                 self.db._conn.execute(
                     "UPDATE tarefas SET ordem_usuario = ? WHERE id = ?",
                     (i, uid)
                 )
-        
         self.db._conn.commit()
-        logger.info("Ordem do usuário persistida no SQLite local.")
 
-        # 2. Mesclar na lista interna self.tarefas (Lógica da Versão 1)
-        indices_na_memoria = []
-        for idx, t in enumerate(self.tarefas):
-            if t["id"] in nova_ordem_ids:
-                indices_na_memoria.append(idx)
-
-        # Cria um mapa dos objetos atuais para reposicioná-los
+        indices_na_memoria = [idx for idx, t in enumerate(self.tarefas) if t["id"] in nova_ordem_ids]
         mapa_objetos = {t["id"]: t for t in self.tarefas if t["id"] in nova_ordem_ids}
         
-        # Reorganiza apenas os itens que estavam visíveis, mantendo os outros nos seus lugares
         for idx, nid in zip(indices_na_memoria, nova_ordem_ids):
             self.tarefas[idx] = mapa_objetos[nid]
-            # Atualiza o campo no dicionário da memória para consistência
             self.tarefas[idx]["ordem_usuario"] = nova_ordem_ids.index(nid)
 
-        # 3. Atualiza a UI sem precisar recarregar tudo do banco
         self._atualizar_lista()
 
     # ================================================================== #
-    #  CONFIGURAÇÕES
+    #  TEMA DA JANELA (CONFIGS E MOVIMENTOS)
     # ================================================================== #
+    def _on_tema_clicked(self):
+        remetente = self.sender()
+        modo = self._mapa_tema.get(remetente, "sistema")
+        self._mudar_tema(modo)
+
+    def _mudar_tema(self, modo: str):
+        self.modo_tema = modo
+        self.tema_atual = resolver_tema(modo)
+        self.config.set("state", "tema", modo)
+        self.config.save()
+        self.setStyleSheet(get_stylesheet(self.tema_atual))
+        self._aplicar_estilos_tema()
+        self._atualizar_seletor_tema()
+        self._atualizar_lista()
+
+    def _atualizar_seletor_tema(self):
+        mapa_inverso = {v: k for k, v in self._mapa_tema.items()}
+        for btn in self._botoes_tema:
+            if btn == mapa_inverso.get(self.modo_tema):
+                btn.setProperty("class", "ThemeBtn Active")
+            else:
+                btn.setProperty("class", "ThemeBtn")
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
+
     def _mudar_opacidade(self, valor: int):
         self.opacidade_atual = valor / 100.0
         self.setWindowOpacity(self.opacidade_atual)
@@ -641,9 +858,6 @@ class WidgetTarefasModerno(QWidget):
         self.config.set("api", "api_key", apikey)
         self.config.save()
 
-    # ================================================================== #
-    #  COLAPSAR / EXPANDIR
-    # ================================================================== #
     def _toggle_collapse(self):
         self.is_collapsed = not self.is_collapsed
         offset = self.expanded_size.width() - self.collapsed_size.width()
@@ -663,9 +877,6 @@ class WidgetTarefasModerno(QWidget):
         self.config.set("state", "collapsed", str(self.is_collapsed).lower())
         self.config.save()
 
-    # ================================================================== #
-    #  ARRASTAR JANELA
-    # ================================================================== #
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.old_pos = event.globalPosition().toPoint()
@@ -680,11 +891,7 @@ class WidgetTarefasModerno(QWidget):
     def mouseReleaseEvent(self, event):
         self.old_pos = None
 
-    # ================================================================== #
-    #  SALVAR POSIÇÃO AO FECHAR
-    # ================================================================== #
     def closeEvent(self, event):
-        # Salvar posição real (expandida) mesmo se colapsado
         if self.is_collapsed:
             offset = self.expanded_size.width() - self.collapsed_size.width()
             self.config.set("window", "pos_x", self.x() - offset)
@@ -694,11 +901,7 @@ class WidgetTarefasModerno(QWidget):
         self.config.save()
         super().closeEvent(event)
 
-    # ================================================================== #
-    #  PERSISTÊNCIA DE ESTADO
-    # ================================================================== #
     def _salvar_estado_filtros(self):
-        """Salva o estado atual dos filtros no config.ini."""
         if self.filtro_minhas.isChecked():
             filtro = "minhas"
         elif self.filtro_escritorio.isChecked():
@@ -707,14 +910,12 @@ class WidgetTarefasModerno(QWidget):
             filtro = "tudo"
         self.config.set("state", "filtro", filtro)
         self.config.set("state", "filtro_alta", str(self.filtro_alta.isChecked()).lower())
+        self.config.set("state", "filtro_delegadas", str(self.filtro_delegadas.isChecked()).lower())
         self.config.save()
 
     def _restaurar_estado(self):
-        """Restaura o estado salvo da UI a partir do config.ini."""
-        # --- Tema ---
         self._atualizar_seletor_tema()
 
-        # --- Filtros ---
         filtro = self.config.get("state", "filtro", fallback="tudo")
         self.filtro_tudo.setChecked(filtro == "tudo")
         self.filtro_minhas.setChecked(filtro == "minhas")
@@ -723,21 +924,22 @@ class WidgetTarefasModerno(QWidget):
         filtro_alta = self.config.get("state", "filtro_alta", fallback="false") == "true"
         self.filtro_alta.setChecked(filtro_alta)
 
-        # --- Tags de criação ---
+        filtro_delegadas = self.config.get("state", "filtro_delegadas", fallback="false") == "true"
+        self.filtro_delegadas.setChecked(filtro_delegadas)
+
+        # Tags de Criação 
         tag_escopo = self.config.get("state", "tag_escopo", fallback="minha")
-        tag_ativa_escopo = self.tag_escritorio if tag_escopo == "escritorio" else self.tag_minha
+        tag_ativa_escopo = self.form_tag_escritorio if tag_escopo == "escritorio" else self.form_tag_minha
         self._select_tag(self._escopo_tags, tag_ativa_escopo)
 
         tag_prior = self.config.get("state", "tag_prioridade", fallback="normal")
-        tag_ativa_prior = self.tag_alta if tag_prior == "alta" else self.tag_normal
+        tag_ativa_prior = self.form_tag_alta if tag_prior == "alta" else self.form_tag_normal
         self._select_tag(self._prior_tags, tag_ativa_prior)
 
-        # --- Aba ativa ---
         aba_concluidas = self.config.get("state", "aba_concluidas", fallback="false") == "true"
         if aba_concluidas:
             self._mudar_aba(True)
 
-        # --- Colapsado (restaurar por último para posição correta) ---
         collapsed = self.config.get("state", "collapsed", fallback="false") == "true"
         if collapsed:
             self._toggle_collapse()
