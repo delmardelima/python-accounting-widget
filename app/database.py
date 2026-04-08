@@ -106,17 +106,20 @@ class Database:
         modificada = 1 if enfileirar else int(tarefa.modificada_localmente)
         self._conn.execute("""
             INSERT OR REPLACE INTO tarefas
-                (id, titulo, concluida, escopo, prioridade, criado_em, atualizado_em, sincronizado, api_key, excluida, modificada_localmente)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, titulo, concluida, escopo, prioridade, criado_em, atualizado_em, 
+                 sincronizado, api_key, excluida, modificada_localmente, 
+                 ordem_usuario, em_andamento, data_vencimento, link_anexo, delegado_para)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             tarefa.id, tarefa.titulo, int(tarefa.concluida),
             tarefa.escopo, tarefa.prioridade,
             tarefa.criado_em, tarefa.atualizado_em,
             int(tarefa.sincronizado), tarefa.api_key,
-            int(tarefa.excluida), modificada
+            int(tarefa.excluida), modificada,
+            tarefa.ordem_usuario, int(tarefa.em_andamento),
+            tarefa.data_vencimento, tarefa.link_anexo, tarefa.delegado_para
         ))
         self._conn.commit()
-
         if enfileirar:
             self.adicionar_pendencia("create", tarefa.id, tarefa.api_key, tarefa.to_dict())
 
@@ -128,16 +131,18 @@ class Database:
             UPDATE tarefas
             SET titulo=?, concluida=?, escopo=?, prioridade=?,
                 atualizado_em=?, sincronizado=?, api_key=?,
-                excluida=?, modificada_localmente=?
+                excluida=?, modificada_localmente=?, 
+                em_andamento=?, data_vencimento=?, link_anexo=?, delegado_para=?
             WHERE id=?
         """, (
             tarefa.titulo, int(tarefa.concluida), tarefa.escopo,
             tarefa.prioridade, tarefa.atualizado_em,
             int(tarefa.sincronizado), tarefa.api_key, 
-            int(tarefa.excluida), modificada, tarefa.id,
+            int(tarefa.excluida), modificada, 
+            int(tarefa.em_andamento), tarefa.data_vencimento, 
+            tarefa.link_anexo, tarefa.delegado_para, tarefa.id
         ))
         self._conn.commit()
-
         if enfileirar:
             self.adicionar_pendencia("update", tarefa.id, tarefa.api_key, tarefa.to_dict())
 

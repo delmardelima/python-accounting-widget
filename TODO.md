@@ -1,13 +1,15 @@
 [x] Modo Compacto Inteligente: Ao colapsar, mostrar apenas um pequeno contador de "Tarefas Pendentes para Hoje".
-[ ] Task Details (Slide-over): Ao clicar em uma tarefa, abrir um painel lateral (sem fechar a lista) para ver descrição detalhada e observações do escritório.
-[ ] Quick Add Hero: Atalho global (ex: Ctrl + Alt + T) para trazer o widget para frente e focar no campo de nova tarefa.
+[x] Task Details (Slide-over): Ao clicar em uma tarefa, abrir um painel lateral (sem fechar a lista) para ver descrição detalhada e observações do escritório.
+[x] Quick Add Hero: Atalho global (ex: Ctrl + Alt + T) para trazer o widget para frente e focar no campo de nova tarefa.
 [x] Diferenciação Visual de Origem: - 🏢 Ícone de prédio para tarefas do Escritório. 👤 Ícone de usuário para tarefas Particulares.
-[ ] Feedback de Conclusão: Efeito de "riscado" (strikethrough) suave e som discreto de sucesso ao marcar tarefas.
+[x] Feedback de Conclusão: Efeito de "riscado" (strikethrough) suave e som discreto de sucesso ao marcar tarefas.
+[x] não esta sendo selecionado para escolher o dia, hoje, amanha, proxima segunda; estou clicando e não acontece nada. preciso ajustar no formulario de cadastro; por padrao é definido hoje.
+[x] no formulario de detalhes, ao iniciar tarefa, não esta permanecendo que a tarefa esta em andamento. esta mudando o botão do play; mas quando volta e abre novamente a tarefa não esta em andamento. o botão volta para play; e deve mudar os status para em andamento. e deve permanecer assim até que seja concluida. o banco de dados possui colunas; por exemplo em_andamento e concluida; precisa ler e atualizar essa informação.
 
 Formulário de Criação (Melhorado)
-[ ] Smart Input: Reconhecer tags como #urgente ou @escritorio diretamente no texto para evitar cliques extras.
-[ ] Data de Vencimento: Adicionar um seletor de data rápido (Hoje, Amanhã, Próxima Segunda).
-[ ] Anexos/Links: Permitir colar um link (ex: link do sistema contábil ou documento) que se torna clicável no card da tarefa.
+[x] Smart Input: Reconhecer tags como #urgente ou @escritorio diretamente no texto para evitar cliques extras.
+[x] Data de Vencimento: Adicionar um seletor de data rápido (Hoje, Amanhã, Próxima Segunda).
+[x] Anexos/Links: Permitir colar um link (ex: link do sistema contábil ou documento) que se torna clicável no card da tarefa.
 
 Notificações do Windows
 
@@ -18,8 +20,8 @@ Notificações do Windows
 [ ] Alerta de Inatividade: Se o usuário não concluiu nada em 4h, enviar um lembrete motivador.
 
 Funcionalidades de Escritório (Core Team)
-[ ] Sinalizador de "Em Andamento": Botão de play/pause no card para indicar que o usuário começou a trabalhar naquela tarefa (útil para o gestor via API).
-[ ] Filtro de "Delegado por Mim": Ver tarefas que o usuário criou para outros membros (se a API suportar).
+[x] Sinalizador de "Em Andamento": Botão de play/pause no card para indicar que o usuário começou a trabalhar naquela tarefa (útil para o gestor via API).
+[x] Filtro de "Delegado por Mim": Ver tarefas que o usuário criou para outros membros (se a API suportar).
 
 Melhorias Técnicas & Sincronização
 [ ] Modo Offline Resiliente: Melhorar a indicação visual de "Sincronizando..." vs "Offline" para o usuário não ter medo de perder dados.
