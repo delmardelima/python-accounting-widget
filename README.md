@@ -39,7 +39,10 @@ O **SageCont-Win** é um widget de área de trabalho moderno, desenvolvido em Py
    ```
    pip install PyQt6 requests
    ```
-
+   ou
+   ```
+   pip install -r requirements.txt
+   ```
 4. **Executar a Aplicação:**  
    ```
    python main.py
@@ -65,6 +68,37 @@ Ao iniciar pela primeira vez, o aplicativo criará um arquivo config.ini na raiz
   * <kbd>task_card.py</kbd>: Componente visual de cada tarefa individual.  
   * <kbd>styles.py</kbd>: Definições de QSS e paletas de cores (Dark/Light).  
   * <kbd>tray_icon.py</kbd>: Gestão do ícone na bandeja do sistema.
+
+
+## **📦 Compilação e Geração do Instalador**
+
+Para distribuir o aplicativo para os usuários finais, você não precisa enviar o código fonte. O projeto está configurado para ser compilado em um executável (.exe) e empacotado em um instalador do Windows.
+
+### **Pré-requisitos para Build**
+
+* **PyInstaller:** Usado para converter o código Python em um .exe autossuficiente.  
+  ```
+  pip install pyinstaller
+  ```
+
+* **Inno Setup (Windows):** Usado para criar o instalador profissional (setup.exe).  
+  * Baixe e instale: [jrsoftware.org/isinfo.php](https://jrsoftware.org/isinfo.php)  
+
+### **Gerando Manualmente**
+
+**1. Gerar o Executável (.exe):**
+
+No terminal, na raiz do projeto, execute:
+```
+pyinstaller --noconfirm --onedir --windowed --icon "imgs/sagecont-win.ico" --name "Sagecont-Win" main.py
+```
+*O executável será gerado na pasta dist/Sagecont-Win/.*
+
+**2. Gerar o Instalador:**
+
+Abra o arquivo instalador.iss no Inno Setup Compiler e clique em **Compile** (ou pressione Ctrl+F9).
+
+*O instalador será gerado na pasta Instalador/.*
 
 ## **📄 Licença**
 
